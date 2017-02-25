@@ -1,0 +1,81 @@
+version: "2"
+services:
+  consul:
+    container_name: consul
+    image: consul:latest
+    command: "agent -dev -ui -datacenter=development -client=0.0.0.0 -node=local-docker-host -log-level=err"
+    ports:
+      - "8500:8500"
+    environment:
+     - SERVICE_8300_IGNORE
+     - SERVICE_8301_IGNORE
+     - SERVICE_8302_IGNORE
+     - SERVICE_8400_IGNORE
+     - SERVICE_8500_NAME=consul-api
+     - SERVICE_8600_IGNORE
+  registrator:
+    container_name: registrator
+    image: gliderlabs/registrator:latest
+    command: -ip=${HOST_IP} consul://localhost:8500
+    network_mode: host
+    volumes:
+      - "/var/run/docker.sock:/tmp/docker.sock"
+  linkerd:
+    container_name: linkerd
+    image: buoyantio/linkerd:0.9.0
+    command: /config.yml
+    links:
+      - namerd
+    environment:
+      - SERVICE_9990_NAME=linkerd-admin
+      - SERVICE_4140_NAME=linkerd-mesh-http
+    ports:
+      - "9990:9990"
+      - "4140:4140"
+    volumes:
+      - "./config/linkerd.yml:/config.yml"
+  namerd:
+    container_name: namerd
+    image: buoyantio/namerd:0.9.0
+    command: /config.yml
+    links:
+      - consul
+    environment:
+      - SERVICE_9991_NAME=namerd-admin
+      - SERVICE_4100_NAME=namerd-api-thrift
+      - SERVICE_4180_NAME=namerd-api-http
+    ports:
+      - "4100:4100"
+      - "4180:4180"
+      - "9991:9991"
+    volumes:
+      - "./config/namerd.yml:/config.yml"
+  gateway:
+    build:
+      context: ./gateway
+    image: gateway
+    container_name: gateway
+    environment:
+      - SERVICE_3000_NAME=gateway
+      - LINKERD_IP=${HOST_IP}
+      - LINKERD_HTTPPORT=4140
+    ports:
+      - "3000:3000"
+  foobar-v1:
+    container_name: foobar-v1
+    image: nginx
+    environment: 
+      - SERVICE_80_NAME=foobar-v1
+    ports:
+      - "8081:80"
+    volumes:
+      - "./assets/index.v1.html:/usr/share/nginx/html/index.html"
+  foobar-v2:
+    container_name: foobar-v2
+    image: nginx
+    environment: 
+      - SERVICE_80_NAME=foobar-v2
+    ports:
+      - "8082:80"
+    volumes:
+      - "./assets/index.v2.html:/usr/share/nginx/html/index.html"
