@@ -20,6 +20,8 @@ Each pattern has it's strengths and weaknesses, some of which have less to do wi
 
 ### API Versioning
 
+
+
 ### Service Versioning
 
 A natural answer to this problem is to implement "versioning" within services.  This usually involves tagging a service with a special numeric sequence.  In Node.js, this sequence is SemVer (Semantic Versioning) consisting of three numbers: major build version, minor build version, and a patch version (e.g. 1.2.3).
