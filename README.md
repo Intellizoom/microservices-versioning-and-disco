@@ -8,17 +8,27 @@ If you are in the process of building a microservice architecture, you probably 
 
 I would also like to hear your thoughts on Microservice versioning and service discovery, particularly if you have other approaches not defined in this document.  Just send me a note on Twitter at [@richardclayton](https://twitter.com/richardclayton).
 
-## Patterns of Service Discovery and Versioning
+## Patterns of Service Versioning
 
-There are three general patterns for ensuring a service communicates with a compatible downstream service.  The patterns are differentiated by the component responsible for versioning and/or discovery:
+There are three general patterns for versioning services and ensure compatibility with upstream components:
 
-* **API Versioning** - services handle versioning at the API/interface level.
-* **Service Versioning** - discovery is handled by a registry with versioning at the service level.
-* **Mesh/Dynamic Routing** - discovery and versioning are external of the service (i.e. service is unaware).
+* **API Versioning** - versioning is handled within the exposed API/protocol.  A single service generally supports multiple versions within a single process.
+* **Service Versioning** - the service as a whole represents a single version and may not be backwards compatible with previous versions.
+* **Version Sets** - microservices are agnostic of version and are instead maintained as compatible sets (e.g. commits that work together).
 
 Each pattern has it's strengths and weaknesses, some of which have less to do with technology and more with the internal structure of your engineering organization.  The next sections will describe each pattern in detail and provide recommendations on the circumstances where they are best employed.
 
 ### API Versioning
+
+API versioning is typically used for externally facing services.  The pattern involves the explicit use of versioning in models and API Endpoints.  A perfect example of this pattern are the AWS APIs, which are versioned by release date (DynamoDB for instance have 2012-08-10 and 2011-12-05 versions).
+
+The key strength to this pattern is the ability to support backwards compatibility with old clients.  This only works, however, if the changes between versions allow earlier clients to be adapted to newer versions of the model.
+
+API versioning probably isn't the best strategy for internal microservices, unless those services are managed by entities outside of your organization and need formal contracts because they are outside of your integration test boundaries.
+
+First, consider the amount of effort creating new versions of API Endpoints.  New versions require updates to route bindings, models, and most likely migrations both at the clie.  You will need a strategy for deprecating and then removing older versions of the API.  Clients will also need to be version aware, increasing the complexity of their implementation.
+
+Probably the greatest problem with API Versioning is that at some point you may need to durastically change the implementation losing backwards compatible.  At that point, clients will have to be updated anyway.  
 
 
 
@@ -36,14 +46,28 @@ This is the common pattern used for service discovery with versioning requiremen
 
 Reading the 
 
-### Mesh/Dynamic Routing
+### Version Sets
 
 
 ### Modifying/Combining Patterns
 
-It is important to note that there is room for variation in these patterns.  For instance, it is possible to use a hybrid of these patterns, like using API Versioning and Mesh/Dynamic Routing together.  While it may make sense for an organization to adopt a hybrid (what do I know about your use cases?), it is easy to argue that purity in implementation pattern is preferable.  Why version an internal API, but then dynamically link a service to it's downsteam dependencies?  In this example, we've doubled the complexity of versioning making it more effort to version and prone to error.
+It is important to note that there is room for variation in these patterns.  For instance, it is possible to use a hybrid of these patterns, like using API and Mesh Versioning together.  While it may make sense for an organization to adopt a hybrid (what do I know about your use cases?), it is easy to argue that purity in implementation pattern is preferable.  Why version an internal API, but then dynamically link a service to it's downsteam dependencies?  In this example, we've doubled the complexity of versioning making it more effort to version and prone to error.
 
 However, I admit that there are use cases where this makes sense.  Did you notice in the example that API was prefaced with "internal"?  That's because it absolutely makes sense to version an API for external clients.  That does not mean you have to use API versioning throughout the architecture (i.e. for the internal APIs).  You can instead employ a Gateway that either transforms requests to a newer API version or performs a look up against a service registry for a matching service version.  There are probably other approaches, but the point is that your internal and external versioning implementations don't have to be the same.
+
+## Patterns of Service Discovery
+
+
+### Fixed Configuration
+
+
+### Client-side Service Lookup
+
+
+### Proxy/Dynamic Routing
+
+
+### Network Overlay
 
 
 
@@ -55,4 +79,11 @@ This is an example project demonstrating how to create a versioned microservice 
 /host=>/srv;
 /svc=>/host;
 /http/1.1/*=>/host;
+```
+
+
+### Create a network alias on OSX
+
+```bash
+sudo ifconfig lo0 alias 10.200.10.1
 ```
