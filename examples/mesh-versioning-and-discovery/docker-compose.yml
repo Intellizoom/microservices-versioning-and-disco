@@ -1,0 +1,135 @@
+version: "2"
+services:
+  consul:
+    container_name: consul
+    image: consul:latest
+    command: "agent -dev -ui -datacenter=development -client=0.0.0.0 -node=local-docker-host -log-level=err"
+    ports:
+      - "8500:8500"
+    environment:
+     - SERVICE_8300_IGNORE
+     - SERVICE_8301_IGNORE
+     - SERVICE_8302_IGNORE
+     - SERVICE_8400_IGNORE
+     - SERVICE_8500_NAME=consul-api
+     - SERVICE_8600_IGNORE
+  registrator:
+    container_name: registrator
+    image: gliderlabs/registrator:latest
+    command: -ip=${HOST_IP} consul://localhost:8500
+    network_mode: host
+    volumes:
+      - "/var/run/docker.sock:/tmp/docker.sock"
+    depends_on:
+      - consul
+  linkerd:
+    container_name: linkerd
+    image: buoyantio/linkerd:1.0.2
+    command: /config.yml
+    environment:
+      - SERVICE_9990_NAME=linkerd-admin
+      - SERVICE_4140_NAME=linkerd-mesh-http
+    ports:
+      - "9990:9990"
+      - "4140:4140"
+    links:
+      - namerdlb
+    volumes:
+      - "./config/linkerd.yml:/config.yml"
+  namerd1:
+    image: buoyantio/namerd:1.0.2
+    command: /config.yml
+    environment:
+      - SERVICE_9991_NAME=namerd-admin
+      - SERVICE_4180_NAME=namerd-api-http
+      - SERVICE_4180_CHECK_TCP=true
+      - SERVICE_TAGS="urlprefix-:4891 proto=tcp"
+    ports:
+      - "4891:4180"
+      - "4991:9991"
+    volumes:
+      - "./config/namerd.yml:/config.yml"
+    links:
+      - consul
+  namerd2:
+    image: buoyantio/namerd:1.0.2
+    command: /config.yml
+    environment:
+      - SERVICE_9991_NAME=namerd-admin
+      - SERVICE_4180_NAME=namerd-api-http
+      - SERVICE_4180_CHECK_TCP=true
+      - SERVICE_TAGS="urlprefix-:4890 proto=tcp"
+    ports:
+      - "4890:4180"
+      - "4990:9991"
+    volumes:
+      - "./config/namerd.yml:/config.yml"
+    links:
+      - consul
+  namerd3:
+    image: buoyantio/namerd:1.0.2
+    command: /config.yml
+    environment:
+      - SERVICE_9991_NAME=namerd-admin
+      - SERVICE_4180_NAME=namerd-api-http
+      - SERVICE_4180_CHECK_TCP=true
+      - SERVICE_TAGS="urlprefix-:4892 proto=tcp"
+    ports:
+      - "4892:4180"
+      - "4992:9991"
+    volumes:
+      - "./config/namerd.yml:/config.yml"
+    links:
+      - consul
+  namerdlb:
+    image: haproxy
+    environment:
+      - SERVICE_4180_NAME=namerdlb
+    volumes:
+     - "./config/haproxy/:/usr/local/etc/haproxy/"
+    links:
+     - namerd1
+     - namerd2
+     - namerd3
+    ports:
+      - "4180:4180"
+      - "8888:8080"
+    depends_on:
+     - namerdlbconf
+  namerdlbconf:
+    image: maauso/docker-consul-template
+    command: /consul-template -consul=consul:8500 -template=/haproxy.cfg.tpl:/haproxy/haproxy.cfg -retry=30s -log-level=debug
+    volumes:
+      - "./config/haproxy.cfg.tpl:/haproxy.cfg.tpl"
+      - "./config/haproxy/:/haproxy/"
+    links:
+      - consul
+  gateway:
+    build:
+      context: ./gateway
+    image: gateway
+    container_name: gateway
+    environment:
+      - SERVICE_3000_NAME=gateway
+      - LINKERD_IP=${HOST_IP}
+      - LINKERD_HTTPPORT=4140
+    ports:
+      - "3000:3000"
+  foobar-v1:
+    container_name: foobar-v1
+    image: nginx
+    environment: 
+      - SERVICE_80_NAME=foobar-v1
+    ports:
+      - "8081:80"
+    volumes:
+      - "./assets/index.v1.html:/usr/share/nginx/html/index.html"
+  foobar-v2:
+    container_name: foobar-v2
+    image: nginx
+    environment: 
+      - SERVICE_80_NAME=foobar-v2
+    ports:
+      - "8082:80"
+    volumes:
+      - "./assets/index.v2.html:/usr/share/nginx/html/index.html"

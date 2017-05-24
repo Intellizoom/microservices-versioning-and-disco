@@ -1,0 +1,16 @@
+{
+  "name": "ecs-docker-reload",
+  "version": "1.0.0",
+  "description": "Sends a SIGHUP to the target container when a file changes",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bluebird": "^3.5.0",
+    "commander": "^2.9.0",
+    "dockerode": "^2.4.3"
+  }
+}
