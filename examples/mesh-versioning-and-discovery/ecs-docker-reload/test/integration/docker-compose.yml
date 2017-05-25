@@ -1,0 +1,27 @@
+version: "2"
+services:
+  edr:
+    build:
+      context: ../../
+    image: edr:latest
+    command: "--reload haproxy --watch /tmp/watchme"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "../../index.js:/opt/edr/index.js"
+      - "./watchme:/tmp/watchme"
+    labels:
+      com.amazonaws.ecs.task-arn: arn:aws:ecs:us-east-1:123456789012:task/faa651a4-27fc-4ce6-aaa4-d969611bdc1b
+      com.amazonaws.ecs.container-name: edr
+  haproxy:
+    image: haproxy
+    volumes:
+      - "./config/haproxy/:/usr/local/etc/haproxy/"
+    labels:
+      com.amazonaws.ecs.task-arn: arn:aws:ecs:us-east-1:123456789012:task/faa651a4-27fc-4ce6-aaa4-d969611bdc1b
+      com.amazonaws.ecs.container-name: haproxy
+    ports:
+      - "8080:8080"
+    links:
+      - helloworld
+  helloworld:
+    image: tutum/hello-world
