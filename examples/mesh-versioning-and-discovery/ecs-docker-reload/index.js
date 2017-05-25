@@ -1,10 +1,10 @@
 const Promise = require('bluebird');
 const fs = require('fs');
 const Docker = require('dockerode');
-const program = require('commander');
+const { Command } = require('commander');
 const os = require('os');
 const { find, get, isArray, isString, isObject } = require('lodash');
-const { ok: assert } = require('assert');
+const { ok: assert, AssertionError } = require('assert');
 
 const ECS_TASK_ARN_KEY = 'com.amazonaws.ecs.task-arn';
 const ECS_CONTAINER_NAME_KEY = 'com.amazonaws.ecs.container-name';
@@ -12,7 +12,7 @@ const ECS_CONTAINER_NAME_KEY = 'com.amazonaws.ecs.container-name';
 const getLabel = (container, label) => get(container, 'Config.Labels', get(container, 'Labels', {}))[label];
 
 const getTaskArn = async (docker, thisContainerId) => {
-  const thisContainer = await docker.getContainer(thisContainerId);
+  const thisContainer = docker.getContainer(thisContainerId);
   assert(
     isObject(thisContainer),
     `Could not find THIS container [${thisContainerId}].
@@ -49,27 +49,41 @@ const getTargetContainer = async (docker, thisContainerId, targetContainerName) 
     `Could not find target container with name "${targetContainerName}".`
   );
   console.log(`Found target container "${targetContainerName}" [${targetContainer.Id.slice(0, 12)}]`);
-  return await docker.getContainer(targetContainer.Id);
+  return docker.getContainer(targetContainer.Id);
 };
 
+const assertOrDie = (condition, message) => {
+  if (!condition) {
+    if (process.env.NODE_ENV === 'test') {
+      throw new AssertionError(message);
+    }
+    console.log(message)
+    program.help(); // this is a process.exit()
+  }
+}
+
 const getConfiguration = (argv) => {
+  // This isolates Commander (does not use the singleton export).
+  // We need to do this because Mocha also uses Commander.
+  const program = new Command();
+
   program
     .version('1.0.0')
     .option('-w, --watch <file>', 'File to watch')
     .option('-r, --reload <container>', 'ECS Container to reload')
-    .option('-t, --wait [timems]', 'Wait a number of milliseconds; default 5000ms')
+    .option('-t, --wait [timems]', 'Wait a number of milliseconds; default 5000ms', parseInt)
     .option('-d, --docker [socket]', 'Path to the Docker socket, default /var/run/docker.sock')
     .parse(argv);
 
-  if (!program.reload) {
-    console.log('Error: --reload property is required.')
-    program.help();
-  }
+  assertOrDie(
+    isString(program.reload),
+    'Error: --reload property is required.'
+  );
 
-  if (!program.watch) {
-    console.log('Error: --watch property is required.')
-    program.help();
-  }
+  assertOrDie(
+    isString(program.watch),
+    'Error: --watch property is required.'
+  );
 
   return {
     waitTime: program.wait || 5000,
@@ -88,27 +102,36 @@ const getDockerInstance = (socketPath) => {
   return new Docker({ socketPath, Promise });
 };
 
+const signalOnFileChange = async (target, fileToWatch) => {
+  assert(
+    fs.statSync(fileToWatch).isFile(),
+    `File to watch ${fileToWatch} was not found or is not a file`
+  );
+
+  fs.watch(fileToWatch, async (eventType, file) => {
+    console.log(`FS.Watch Event: ${eventType}, File: ${file}; signalling restart.`);
+    try {
+      await target.kill({ signal: 'SIGHUP' });
+    } catch (error) {
+      console.error(error);
+    }
+  });
+}
+
 const run = async (argv) => {
   try {
     const config = getConfiguration(argv);
     const docker = await getDockerInstance(config.dockerSocket);
-    const target = await getTargetContainer(docker, config.hostname, config.reload);
+
+    console.log(`Waiting ${config.waitTime} ms for target container and file to appear.`);
 
     await Promise.delay(config.waitTime);
 
-    assert(
-      fs.statSync(config.fileToWatch).isFile(),
-      `File to watch ${config.fileToWatch} was not found or is not a file`
-    );
+    const target = await getTargetContainer(docker, config.hostname, config.reload);
 
-    fs.watch(config.fileToWatch, async (eventType, file) => {
-      console.log(`FS.Watch Event: ${eventType}, File: ${file}; signalling restart.`);
-      try {
-        await target.kill({ signal: 'SIGHUP' });
-      } catch (error) {
-        console.error(error);
-      }
-    });
+    console.log(`Watching path ${config.fileToWatch} to change...`);
+
+    signalOnFileChange(target, config.fileToWatch);
   }
   catch (error) {
     console.error(error);
@@ -124,6 +147,11 @@ module.exports = {
   getTaskContainers,
   getTaskArn,
   run,
+  signalOnFileChange,
+  constants: {
+    ECS_CONTAINER_NAME_KEY,
+    ECS_TASK_ARN_KEY,
+  },
 };
 
 if (process.env.NODE_ENV !== 'test') {
