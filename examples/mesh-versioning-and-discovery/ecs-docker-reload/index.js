@@ -108,7 +108,7 @@ const signalOnFileChange = async (target, fileToWatch) => {
     `File to watch ${fileToWatch} was not found or is not a file`
   );
 
-  fs.watch(fileToWatch, async (eventType, file) => {
+  return fs.watch(fileToWatch, async (eventType, file) => {
     console.log(`FS.Watch Event: ${eventType}, File: ${file}; signalling restart.`);
     try {
       await target.kill({ signal: 'SIGHUP' });

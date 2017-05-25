@@ -1,13 +1,16 @@
+const Promise = require('bluebird');
 const { describe, it } = require('mocha');
 const chai = require('chai');
 const { AssertionError } = require('assert');
 const { stub } = require('sinon');
 const os = require('os');
+const fs = require('fs');
 const { resolve } = require('path');
 
 const { expect } = chai;
 
 chai.use(require('chai-as-promised'));
+chai.use(require('sinon-chai'));
 
 const {
   getConfiguration,
@@ -254,6 +257,37 @@ describe('ECS Docker Reload', () => {
   });
 
   describe('Signal on File Change', () => {
+    it('should throw an error if the file does not exist', () => {
+      return expect(signalOnFileChange({}, '/should/not/exist'))
+        .to.be.rejected;
+    });
 
+    describe('File Watcher', () => {
+      let watcher;
+      const fileToWatch = resolve(__dirname, './watchme');
+      
+      beforeEach(() => {
+        fs.writeFileSync(fileToWatch, 'foobar\n');
+      });
+
+      afterEach(() => {
+        if (watcher) {
+          watcher.close();
+        }
+        fs.unlinkSync(fileToWatch);
+      });
+
+      it('should watch the file and send the SIGHUP signal on change', async () => {
+        const target = {
+          kill: stub(),
+        };
+        target.kill.resolves();
+        watcher = await signalOnFileChange(target, fileToWatch);
+        fs.writeFileSync(fileToWatch, 'foobar\n');
+        // Give the FS.Watch 50ms to react to the event (probably next event loop, but who knows?).
+        await Promise.delay(50);
+        expect(target.kill).to.be.calledWith({ signal: 'SIGHUP' });
+      });
+    });
   });
 });
