@@ -110,7 +110,7 @@ describe('ECS Docker Reload', () => {
       const docker = {
         getContainer: stub(),
       };
-      docker.getContainer.rejects();
+      docker.getContainer.returns(null);
       return expect(getTargetContainer(docker, 'foo-bar', 'hello-world')).to.be.rejected;
     });
 
@@ -252,10 +252,6 @@ describe('ECS Docker Reload', () => {
     });
   });
 
-  describe('Run', () => {
-
-  });
-
   describe('Signal on File Change', () => {
     it('should throw an error if the file does not exist', () => {
       return expect(signalOnFileChange({}, '/should/not/exist'))
@@ -284,8 +280,10 @@ describe('ECS Docker Reload', () => {
         target.kill.resolves();
         watcher = await signalOnFileChange(target, fileToWatch);
         fs.writeFileSync(fileToWatch, 'foobar\n');
-        // Give the FS.Watch 50ms to react to the event (probably next event loop, but who knows?).
-        await Promise.delay(50);
+        // Give the FS.Watch 1500ms to react to the event (probably next event loop, but who knows?).
+        // OMG - this used to be 50ms, but OSX is a hot mess and I had to increase it
+        // by a second.
+        await Promise.delay(1500);
         expect(target.kill).to.be.calledWith({ signal: 'SIGHUP' });
       });
     });
