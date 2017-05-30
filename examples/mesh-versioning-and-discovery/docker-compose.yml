@@ -16,7 +16,7 @@ services:
   registrator:
     container_name: registrator
     image: gliderlabs/registrator:latest
-    command: -ip=${HOST_IP} consul://localhost:8500
+    command: consul://localhost:8500
     network_mode: host
     volumes:
       - "/var/run/docker.sock:/tmp/docker.sock"
@@ -42,11 +42,9 @@ services:
     environment:
       - SERVICE_9991_NAME=namerd-admin
       - SERVICE_4180_NAME=namerd-api-http
-      - SERVICE_4180_CHECK_TCP=true
-      - SERVICE_TAGS="urlprefix-:4891 proto=tcp"
     ports:
-      - "4891:4180"
-      - "4991:9991"
+      - "4180"
+      - "9991"
     volumes:
       - "./config/namerd.yml:/config.yml"
     links:
@@ -57,11 +55,9 @@ services:
     environment:
       - SERVICE_9991_NAME=namerd-admin
       - SERVICE_4180_NAME=namerd-api-http
-      - SERVICE_4180_CHECK_TCP=true
-      - SERVICE_TAGS="urlprefix-:4890 proto=tcp"
     ports:
-      - "4890:4180"
-      - "4990:9991"
+      - "4180"
+      - "9991"
     volumes:
       - "./config/namerd.yml:/config.yml"
     links:
@@ -72,11 +68,9 @@ services:
     environment:
       - SERVICE_9991_NAME=namerd-admin
       - SERVICE_4180_NAME=namerd-api-http
-      - SERVICE_4180_CHECK_TCP=true
-      - SERVICE_TAGS="urlprefix-:4892 proto=tcp"
     ports:
-      - "4892:4180"
-      - "4992:9991"
+      - "4180"
+      - "9991"
     volumes:
       - "./config/namerd.yml:/config.yml"
     links:
@@ -94,6 +88,9 @@ services:
     ports:
       - "4180:4180"
       - "8888:8080"
+    labels:
+      com.amazonaws.ecs.task-arn: arn:aws:ecs:us-east-1:123456789012:task/faa651a4-27fc-4ce6-aaa4-d969611bdc1b
+      com.amazonaws.ecs.container-name: haproxy
     depends_on:
      - namerdlbconf
   namerdlbconf:
@@ -104,6 +101,18 @@ services:
       - "./config/haproxy/:/haproxy/"
     links:
       - consul
+  namerdlbreload:
+    image: intellizoom/ecs-docker-reload
+    command: "/edr --reload haproxy --watch /haproxy"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./config/haproxy/:/haproxy/"
+    labels:
+      com.amazonaws.ecs.task-arn: arn:aws:ecs:us-east-1:123456789012:task/faa651a4-27fc-4ce6-aaa4-d969611bdc1b
+      com.amazonaws.ecs.container-name: edr
+    depends_on:
+     - namerdlb
+     - namerdlbconf
   gateway:
     build:
       context: ./gateway

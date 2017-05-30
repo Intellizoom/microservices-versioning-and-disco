@@ -30,6 +30,8 @@ listen namerd
         option tcplog
         balance roundrobin
 
+        {{range $index, $service := service "namerd-api-http"}}
+        server {{.Name}}-{{$index}} {{.Address}}:{{.Port}} check{{end}}
         server namerd1 namerd1:4180 check
         server namerd2 namerd2:4180 check
         server namerd3 namerd3:4180 check
